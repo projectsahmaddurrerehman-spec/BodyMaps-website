@@ -3076,7 +3076,9 @@ def get_session_reconstruction(session_id):
 
 #### INFERENCE ENDPOINTS ####
 
-CHUNK_DIR = "/tmp/uploads"  # Temporary folder for chunked uploads
+# Keep the production Linux default, while allowing local Windows/macOS setups
+# to choose a writable directory through flask-server/.env.
+CHUNK_DIR = os.getenv("BODYMAPS_UPLOAD_CHUNK_DIR", "/tmp/uploads")
 os.makedirs(CHUNK_DIR, exist_ok=True)
 
 @api_blueprint.route("/upload-inference-chunk", methods=["POST"])

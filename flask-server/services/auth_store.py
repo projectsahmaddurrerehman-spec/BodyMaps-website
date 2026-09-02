@@ -7,6 +7,7 @@ credential checks, opaque session tokens, and the one-time tokens behind
 """
 
 import hashlib
+import os
 import secrets
 import uuid
 from datetime import timedelta
@@ -23,7 +24,31 @@ from models.email_verification import EmailVerificationToken
 from models.password_reset import PasswordResetToken
 from models.user import SYSTEM_USER_EMAIL, SYSTEM_USER_ID, User
 
-_ph = PasswordHasher()
+
+def _password_hasher() -> PasswordHasher:
+    """Build the password hasher, preserving Argon2 defaults unless overridden.
+
+    ``BODYMAPS_ARGON2_MEMORY_COST`` exists for constrained local-development
+    machines.  It must never be set on the public deployment without a
+    deliberate security review.  With no environment override, this is exactly
+    the library's standard ``PasswordHasher()`` configuration.
+    """
+    raw_memory_cost = (os.getenv("BODYMAPS_ARGON2_MEMORY_COST") or "").strip()
+    if not raw_memory_cost:
+        return PasswordHasher()
+
+    try:
+        memory_cost = int(raw_memory_cost)
+    except ValueError as exc:
+        raise ValueError(
+            "BODYMAPS_ARGON2_MEMORY_COST must be a positive integer"
+        ) from exc
+    if memory_cost <= 0:
+        raise ValueError("BODYMAPS_ARGON2_MEMORY_COST must be a positive integer")
+    return PasswordHasher(memory_cost=memory_cost)
+
+
+_ph = _password_hasher()
 
 SESSION_TTL_DAYS = 14
 

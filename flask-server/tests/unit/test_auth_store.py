@@ -41,6 +41,12 @@ def test_register_and_authenticate(store):
     assert store.authenticate("nobody@example.com", "whatever") is None
 
 
+def test_local_argon2_memory_override(store, monkeypatch):
+    monkeypatch.setenv("BODYMAPS_ARGON2_MEMORY_COST", "16384")
+    reloaded = importlib.reload(store)
+    assert reloaded._ph.memory_cost == 16384
+
+
 def test_duplicate_email_rejected(store):
     store.create_user("dup@example.com", "password1")
     with pytest.raises(store.EmailTakenError):

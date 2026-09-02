@@ -8,6 +8,30 @@ import wasm from 'vite-plugin-wasm';
 // https://vite.dev/config/
 
 const env = loadEnv('development', process.cwd(), '');
+const skipViewerDependencyOptimization =
+	env.BODYMAPS_SKIP_VIEWER_DEP_OPTIMIZATION === 'true';
+
+const viewerCodecDependencies = [
+	"dicom-parser",
+	"jpeg-lossless-decoder-js",
+	"@cornerstonejs/codec-charls/decodewasmjs",
+	"@cornerstonejs/codec-libjpeg-turbo-8bit/decodewasmjs",
+	"@cornerstonejs/codec-openjpeg/decodewasmjs",
+	"@cornerstonejs/codec-openjph/wasmjs",
+];
+
+// React Router's source imports these CommonJS helpers. Pre-bundle only those
+// helpers in the lightweight mode so their named imports work in the browser,
+// without traversing the CT viewer codec tree.
+const lightweightDependencies = [
+	"react",
+	"react/jsx-dev-runtime",
+	"react-dom/client",
+	"cookie",
+	"set-cookie-parser",
+	"jszip",
+	"pako",
+];
 
 export default defineConfig({
 	plugins: [react(), tailwindcss(), wasm(), topLevelAwait()],
@@ -15,6 +39,10 @@ export default defineConfig({
 		extensions: ['.js', '.jsx', '.ts', '.tsx', '.json', '.wasm'], // add .wasm
 	},
 	optimizeDeps: {
+		// In lightweight local mode, avoid Vite's full dependency discovery too.
+		// That scan can otherwise reach the CT viewer's optional codec tree even
+		// when the dashboard is the only route being opened.
+		noDiscovery: skipViewerDependencyOptimization,
 		// @cornerstonejs/dicom-image-loader ships its pixel-decode WORKERS as separate
 		// entry files (decodeImageFrameWorker.js?worker_file). If the dep optimizer
 		// pre-bundles the loader it mangles those worker references ("file does not
@@ -32,14 +60,13 @@ export default defineConfig({
 		// `root = this` = undefined at ESM top level → "Cannot read properties of
 		// undefined (reading 'zlib')". This exclude+include pair matches the official
 		// Cornerstone3D Vite guidance. (comlink is real ESM, chai is test-only — safe.)
-		include: [
-			"dicom-parser",
-			"jpeg-lossless-decoder-js",
-			"@cornerstonejs/codec-charls/decodewasmjs",
-			"@cornerstonejs/codec-libjpeg-turbo-8bit/decodewasmjs",
-			"@cornerstonejs/codec-openjpeg/decodewasmjs",
-			"@cornerstonejs/codec-openjph/wasmjs",
-		],
+		// Some memory-constrained local computers cannot pre-bundle the full
+		// viewer codec stack. This opt-in switch keeps lightweight pages, such
+		// as the dashboard, usable while deliberately leaving viewer testing for
+		// a machine with sufficient memory. Production never sets this flag.
+		include: skipViewerDependencyOptimization
+			? lightweightDependencies
+			: viewerCodecDependencies,
 	},
 	build: {
 		target: "esnext",
